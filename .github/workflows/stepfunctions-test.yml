@@ -71,12 +71,30 @@ jobs:
       run: |
         # Install Java (required for Step Functions Local)
         sudo apt-get update
-        sudo apt-get install -y openjdk-11-jdk
+        sudo apt-get install -y openjdk-17-jdk
         
         # Download and setup Step Functions Local
-        wget https://github.com/aws/aws-stepfunctions-local/releases/download/v1.7.0/StepFunctionsLocal.jar
+        # Try multiple versions to ensure we get a working download
         mkdir -p stepfunctions-local
-        mv StepFunctionsLocal.jar stepfunctions-local/
+        cd stepfunctions-local
+        
+        # Try different versions in order of preference
+        if ! wget -q https://github.com/aws/aws-stepfunctions-local/releases/download/v1.6.0/StepFunctionsLocal.jar; then
+          if ! wget -q https://github.com/aws/aws-stepfunctions-local/releases/download/v1.5.0/StepFunctionsLocal.jar; then
+            if ! wget -q https://github.com/aws/aws-stepfunctions-local/releases/download/v1.4.0/StepFunctionsLocal.jar; then
+              echo "Failed to download Step Functions Local JAR. Trying latest release..."
+              wget https://github.com/aws/aws-stepfunctions-local/releases/latest/download/StepFunctionsLocal.jar
+            fi
+          fi
+        fi
+        
+        # Verify the JAR file was downloaded
+        if [ ! -f "StepFunctionsLocal.jar" ]; then
+          echo "Error: StepFunctionsLocal.jar not found after download attempts"
+          exit 1
+        fi
+        
+        cd ..
         
     - name: Configure AWS credentials (dummy for local testing)
       run: |
