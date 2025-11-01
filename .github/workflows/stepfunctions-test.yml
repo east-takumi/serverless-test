@@ -152,7 +152,9 @@ jobs:
           # Verify Step Functions Local is responding
           echo "Testing Step Functions Local connectivity..."
           for i in {1..15}; do
-            if curl -s -f http://localhost:8083/ > /dev/null 2>&1; then
+            if aws stepfunctions list-state-machines \
+              --endpoint-url http://localhost:8083 \
+              --region us-east-1 > /dev/null 2>&1; then
               echo "✓ Step Functions Local is responding on port 8083"
               break
             elif [ $i -eq 15 ]; then
@@ -177,35 +179,16 @@ jobs:
 
           # Create the state machine using Python script
           python scripts/create_state_machine.py
-          
+
           # Verify state machine ARN was created
           if [ -f "state_machine_arn.txt" ]; then
             STATE_MACHINE_ARN=$(cat state_machine_arn.txt)
             echo "✓ State machine created successfully: $STATE_MACHINE_ARN"
-            
+
             # Test state machine accessibility
             echo "Testing state machine accessibility..."
-            cat > test_state_machine.py << 'EOF'
-import boto3
-import os
-import sys
-client = boto3.client('stepfunctions', 
-                     endpoint_url='http://localhost:8083',
-                     region_name='us-east-1',
-                     aws_access_key_id='dummy',
-                     aws_secret_access_key='dummy')
-try:
-    state_machine_arn = os.environ.get('STATE_MACHINE_ARN')
-    response = client.describe_state_machine(stateMachineArn=state_machine_arn)
-    print('✓ State machine is accessible and ready for testing')
-    print('State machine name:', response['name'])
-    print('State machine status:', response['status'])
-except Exception as e:
-    print('❌ State machine accessibility test failed:', str(e))
-    sys.exit(1)
-EOF
             export STATE_MACHINE_ARN="$STATE_MACHINE_ARN"
-            python test_state_machine.py
+            python scripts/check_state_machine_accessibility.py
           else
             echo "❌ State machine ARN file not found"
             exit 1
