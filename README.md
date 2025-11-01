@@ -48,3 +48,14 @@ sam build
 ```bash
 # Step Functions Localの起動とテスト実行は後続のタスクで実装
 ```
+
+## GitHub Actionsでの認証情報管理
+
+GitHub Actions上でAWSリソースへ安全にアクセスするには、リポジトリのシークレットに認証情報を登録します。
+
+1. GitHubのリポジトリページで **Settings > Secrets and variables > Actions** を開きます。
+2. 以下のシークレットを追加します。
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+   - （必要に応じて）`AWS_SESSION_TOKEN`
+3. ワークフローではこれらのシークレットが自動的に読み込まれ、`aws-actions/configure-aws-credentials` によって安全に設定されます。シークレットが未登録の場合はローカルテスト向けのダミー資格情報が自動的に使用されます。
