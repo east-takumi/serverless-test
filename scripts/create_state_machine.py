@@ -28,9 +28,33 @@ def create_state_machine():
             return False
         
         with open(definition_file, 'r', encoding='utf-8') as f:
-            definition = f.read()
+            definition_template = f.read()
         
         logger.info(f"Loaded state machine definition from {definition_file}")
+        
+        # ローカルテスト用のLambda ARNに置換
+        # Step Functions Localでは実際のARN形式を使用する必要がある
+        # SAM buildで生成される関数名に合わせる
+        stack_name = os.getenv('SAM_STACK_NAME', 'stepfunctions-local-testing')
+        environment = os.getenv('ENVIRONMENT', 'local')
+        
+        local_function_arns = {
+            'ProcessState1FunctionArn': f'arn:aws:lambda:us-east-1:123456789012:function:{stack_name}-ProcessState1-{environment}',
+            'ProcessState2FunctionArn': f'arn:aws:lambda:us-east-1:123456789012:function:{stack_name}-ProcessState2-{environment}',
+            'ProcessState3FunctionArn': f'arn:aws:lambda:us-east-1:123456789012:function:{stack_name}-ProcessState3-{environment}'
+        }
+        
+        # プレースホルダーを実際のARNに置換
+        definition = definition_template
+        for placeholder, arn in local_function_arns.items():
+            old_placeholder = f"${{{placeholder}}}"
+            definition = definition.replace(old_placeholder, arn)
+            logger.info(f"Replaced {old_placeholder} with {arn}")
+        
+        logger.info("Substituted Lambda function ARNs for local testing")
+        
+        # 置換後の定義をログ出力（デバッグ用）
+        logger.info("Final state machine definition created with local Lambda ARNs")
         
         # Step Functions Localクライアントの作成
         stepfunctions_endpoint = os.getenv('STEPFUNCTIONS_ENDPOINT', 'http://localhost:8083')
