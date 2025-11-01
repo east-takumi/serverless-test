@@ -67,34 +67,13 @@ jobs:
         fi
         sam --version
         
-    - name: Install Step Functions Local
+    - name: Setup Step Functions Local with Docker
       run: |
-        # Install Java (required for Step Functions Local)
-        sudo apt-get update
-        sudo apt-get install -y openjdk-17-jdk
+        # Pull the official AWS Step Functions Local Docker image
+        docker pull amazon/aws-stepfunctions-local:latest
         
-        # Download and setup Step Functions Local
-        # Try multiple versions to ensure we get a working download
-        mkdir -p stepfunctions-local
-        cd stepfunctions-local
-        
-        # Try different versions in order of preference
-        if ! wget -q https://github.com/aws/aws-stepfunctions-local/releases/download/v1.6.0/StepFunctionsLocal.jar; then
-          if ! wget -q https://github.com/aws/aws-stepfunctions-local/releases/download/v1.5.0/StepFunctionsLocal.jar; then
-            if ! wget -q https://github.com/aws/aws-stepfunctions-local/releases/download/v1.4.0/StepFunctionsLocal.jar; then
-              echo "Failed to download Step Functions Local JAR. Trying latest release..."
-              wget https://github.com/aws/aws-stepfunctions-local/releases/latest/download/StepFunctionsLocal.jar
-            fi
-          fi
-        fi
-        
-        # Verify the JAR file was downloaded
-        if [ ! -f "StepFunctionsLocal.jar" ]; then
-          echo "Error: StepFunctionsLocal.jar not found after download attempts"
-          exit 1
-        fi
-        
-        cd ..
+        # Verify Docker image is available
+        docker images amazon/aws-stepfunctions-local
         
     - name: Configure AWS credentials (dummy for local testing)
       run: |
@@ -105,13 +84,16 @@ jobs:
    
     - name: Start Step Functions Local
       run: |
-        # Start Step Functions Local in background
-        cd stepfunctions-local
-        java -jar StepFunctionsLocal.jar --lambda-endpoint http://localhost:3001 &
-        echo $! > stepfunctions.pid
+        # Start Step Functions Local using Docker in background
+        # Use host networking for better compatibility in GitHub Actions
+        docker run -d \
+          --name stepfunctions-local \
+          --network host \
+          -e LAMBDA_ENDPOINT=http://localhost:3001 \
+          amazon/aws-stepfunctions-local:latest
         
         # Wait for Step Functions Local to start
-        sleep 10
+        sleep 15
         
         # Verify Step Functions Local is running
         curl -f http://localhost:8083/ || (echo "Step Functions Local failed to start" && exit 1)
@@ -173,10 +155,9 @@ jobs:
     - name: Cleanup processes
       if: always()
       run: |
-        # Stop Step Functions Local
-        if [ -f stepfunctions-local/stepfunctions.pid ]; then
-          kill $(cat stepfunctions-local/stepfunctions.pid) || true
-        fi
+        # Stop Step Functions Local Docker container
+        docker stop stepfunctions-local || true
+        docker rm stepfunctions-local || true
         
         # Stop SAM local API
         if [ -f sam-api.pid ]; then
@@ -184,5 +165,4 @@ jobs:
         fi
         
         # Clean up any remaining processes
-        pkill -f "StepFunctionsLocal.jar" || true
         pkill -f "sam local start-api" || true
