@@ -87,15 +87,22 @@ jobs:
         # Build SAM application
         sam build
         
-        # Start SAM local API in background for Lambda functions
-        sam local start-api --port 3001 &
-        echo $! > sam-api.pid
+        # Start SAM local Lambda endpoint in background for Step Functions
+        # Use start-lambda instead of start-api since we don't have API Gateway resources
+        sam local start-lambda --port 3001 &
+        echo $! > sam-lambda.pid
         
-        # Wait for SAM local API to start
+        # Wait for SAM local Lambda endpoint to start
         sleep 15
         
-        # Verify SAM local API is running
-        curl -f http://localhost:3001/ || echo "SAM API started"
+        # Verify SAM local Lambda endpoint is running
+        # Lambda endpoint doesn't respond to HTTP GET, so just check if process is running
+        if ps -p $(cat sam-lambda.pid) > /dev/null; then
+          echo "SAM Lambda endpoint started successfully"
+        else
+          echo "SAM Lambda endpoint failed to start"
+          exit 1
+        fi
         
     - name: Start Step Functions Local
       run: |
@@ -166,10 +173,10 @@ jobs:
         docker stop stepfunctions-local || true
         docker rm stepfunctions-local || true
         
-        # Stop SAM local API
-        if [ -f sam-api.pid ]; then
-          kill $(cat sam-api.pid) || true
+        # Stop SAM local Lambda endpoint
+        if [ -f sam-lambda.pid ]; then
+          kill $(cat sam-lambda.pid) || true
         fi
         
         # Clean up any remaining processes
-        pkill -f "sam local start-api" || true
+        pkill -f "sam local start-lambda" || true
