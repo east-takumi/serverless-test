@@ -76,6 +76,11 @@
   - GitHub Actions環境での実行確認とデバッグ機能
   - _要件: 2.5, 3.2, 3.5_
 
+- [x] 7. GitHub Actions workflow修正
+  - 非推奨のactions/upload-artifact@v3をv4に更新
+  - GitHub Actionsワークフローの互換性問題を解決
+  - _要件: 3.1, 3.2_
+
 - [ ]* 6.3 パフォーマンステストとドキュメント作成
   - 実行時間測定とリソース使用量監視のテストを作成
   - README.mdとテスト実行手順のドキュメントを作成
