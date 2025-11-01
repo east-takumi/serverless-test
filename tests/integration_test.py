@@ -294,11 +294,14 @@ class IntegrationTestOrchestrator:
             # ステートマシン存在確認
             if stepfunctions_available and self.environment.state_machine_arn:
                 try:
-                    status = client.get_execution_status("dummy")  # ダミー実行で接続確認
+                    # ステートマシンの存在確認（ダミー実行ARNではなく、ステートマシンの詳細取得で確認）
+                    client.client.describe_state_machine(stateMachineArn=self.environment.state_machine_arn)
                     state_machine_available = True
-                except Exception:
-                    # ステートマシンが存在するかの詳細確認は実際の実行時に行う
-                    state_machine_available = True
+                    self.logger.info("✓ State machine exists and is accessible")
+                except Exception as e:
+                    # ステートマシンが存在しない場合は警告として扱う
+                    state_machine_available = False
+                    connectivity_result['warnings'].append(f"State machine may not exist: {str(e)}")
                 
                 connectivity_result['service_status']['state_machine'] = state_machine_available
             
