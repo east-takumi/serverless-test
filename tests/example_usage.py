@@ -8,10 +8,22 @@ import logging
 from datetime import datetime
 
 # テストフレームワークのインポート
-from stepfunctions_local_client import StepFunctionsLocalClient
-from workflow_execution_test import WorkflowExecutionTester, create_sample_test_scenarios
-from input_output_validator import InputOutputValidator, AssertionHelper
-from test_runner import StepFunctionsTestRunner, load_config
+try:
+    from stepfunctions_local_client import StepFunctionsLocalClient
+    from workflow_execution_test import (
+        WorkflowExecutionTester,
+        create_sample_test_scenarios,
+    )
+    from input_output_validator import InputOutputValidator, AssertionHelper
+    from test_runner import StepFunctionsTestRunner, load_config
+except ImportError:  # pragma: no cover - fallback for package imports
+    from .stepfunctions_local_client import StepFunctionsLocalClient
+    from .workflow_execution_test import (
+        WorkflowExecutionTester,
+        create_sample_test_scenarios,
+    )
+    from .input_output_validator import InputOutputValidator, AssertionHelper
+    from .test_runner import StepFunctionsTestRunner, load_config
 
 # ログ設定
 logging.basicConfig(level=logging.INFO)
