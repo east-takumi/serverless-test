@@ -1,0 +1,64 @@
+{
+  "stepfunctions_local_endpoint": "http://localhost:8083",
+  "region_name": "us-east-1",
+  "state_machine_arn": "arn:aws:states:us-east-1:123456789012:stateMachine:stepfunctions-local-testing-Workflow-local",
+  "test_scenarios": [
+    {
+      "name": "basic_workflow_test",
+      "input_data": {
+        "requestId": "test-request-001",
+        "inputData": {
+          "value": "test_value_basic",
+          "metadata": {
+            "source": "automated_test",
+            "timestamp": "2024-01-01T00:00:00Z"
+          }
+        }
+      },
+      "timeout_seconds": 300
+    },
+    {
+      "name": "complex_data_workflow_test", 
+      "input_data": {
+        "requestId": "test-request-002",
+        "inputData": {
+          "value": "complex_test_data_with_special_chars_!@#$%",
+          "metadata": {
+            "source": "complex_test",
+            "timestamp": "2024-01-01T00:00:00Z",
+            "additional_info": {
+              "test_type": "complex_scenario",
+              "expected_transformations": 3
+            }
+          }
+        }
+      },
+      "timeout_seconds": 300
+    },
+    {
+      "name": "minimal_data_workflow_test",
+      "input_data": {
+        "requestId": "test-request-003", 
+        "inputData": {
+          "value": "min"
+        }
+      },
+      "timeout_seconds": 300
+    },
+    {
+      "name": "unicode_data_workflow_test",
+      "input_data": {
+        "requestId": "test-request-004",
+        "inputData": {
+          "value": "テスト用データ_日本語_🚀",
+          "metadata": {
+            "source": "unicode_test",
+            "timestamp": "2024-01-01T00:00:00Z",
+            "encoding": "utf-8"
+          }
+        }
+      },
+      "timeout_seconds": 300
+    }
+  ]
+}

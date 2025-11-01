@@ -1,0 +1,33 @@
+{
+  "Comment": "Step Functions Local設定ファイル - ローカルテスト用のエンドポイントとARN設定",
+  "StateMachines": {
+    "WorkflowStateMachine": {
+      "Definition": "./workflow/state_machine.json",
+      "RoleArn": "arn:aws:iam::123456789012:role/StepFunctionsRole",
+      "StateMachineName": "LocalTestWorkflow"
+    }
+  },
+  "LambdaFunctions": {
+    "ProcessState1Function": {
+      "FunctionName": "ProcessState1-local",
+      "Runtime": "python3.9",
+      "Handler": "state1.lambda_handler",
+      "CodeUri": "./src/"
+    },
+    "ProcessState2Function": {
+      "FunctionName": "ProcessState2-local", 
+      "Runtime": "python3.9",
+      "Handler": "state2.lambda_handler",
+      "CodeUri": "./src/"
+    },
+    "ProcessState3Function": {
+      "FunctionName": "ProcessState3-local",
+      "Runtime": "python3.9", 
+      "Handler": "state3.lambda_handler",
+      "CodeUri": "./src/"
+    }
+  },
+  "MockConfigFile": "./mock-config.json",
+  "Account": "123456789012",
+  "Region": "us-east-1"
+}

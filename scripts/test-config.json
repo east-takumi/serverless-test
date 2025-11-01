@@ -1,0 +1,20 @@
+{
+  "stepfunctions": {
+    "endpoint": "http://localhost:8083",
+    "region": "us-east-1"
+  },
+  "sam": {
+    "endpoint": "http://localhost:3001",
+    "port": 3001
+  },
+  "test": {
+    "timeout": 30,
+    "retry_attempts": 3,
+    "test_data_path": "tests/test_data"
+  },
+  "aws": {
+    "access_key_id": "dummy",
+    "secret_access_key": "dummy",
+    "region": "us-east-1"
+  }
+}

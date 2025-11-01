@@ -1,0 +1,37 @@
+{
+  "Comment": "Step Functions Localのモック設定 - Lambda関数のローカル実行用",
+  "LambdaFunctions": {
+    "ProcessState1-local": {
+      "EndpointUrl": "http://localhost:3001",
+      "Region": "us-east-1",
+      "Credentials": {
+        "AccessKeyId": "local",
+        "SecretAccessKey": "local"
+      }
+    },
+    "ProcessState2-local": {
+      "EndpointUrl": "http://localhost:3001", 
+      "Region": "us-east-1",
+      "Credentials": {
+        "AccessKeyId": "local",
+        "SecretAccessKey": "local"
+      }
+    },
+    "ProcessState3-local": {
+      "EndpointUrl": "http://localhost:3001",
+      "Region": "us-east-1", 
+      "Credentials": {
+        "AccessKeyId": "local",
+        "SecretAccessKey": "local"
+      }
+    }
+  },
+  "StepFunctions": {
+    "EndpointUrl": "http://localhost:8083",
+    "Region": "us-east-1",
+    "Credentials": {
+      "AccessKeyId": "local",
+      "SecretAccessKey": "local"
+    }
+  }
+}

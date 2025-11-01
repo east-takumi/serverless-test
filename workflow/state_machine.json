@@ -1,0 +1,135 @@
+{
+  "Comment": "3つのLambda関数を順次実行するワークフロー - ステート間のデータフローとエラーハンドリングを含む",
+  "StartAt": "State1",
+  "States": {
+    "State1": {
+      "Type": "Task",
+      "Resource": "${ProcessState1FunctionArn}",
+      "Next": "State2",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.state1Result",
+      "Parameters": {
+        "input.$": "$",
+        "stateInfo": {
+          "stateName": "State1",
+          "stateIndex": 1
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        },
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError",
+          "ResultPath": "$.error",
+          "Comment": "State1実行エラーをキャッチ"
+        }
+      ]
+    },
+    "State2": {
+      "Type": "Task",
+      "Resource": "${ProcessState2FunctionArn}",
+      "Next": "State3",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.state2Result",
+      "Parameters": {
+        "input.$": "$",
+        "stateInfo": {
+          "stateName": "State2",
+          "stateIndex": 2
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        },
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError",
+          "ResultPath": "$.error",
+          "Comment": "State2実行エラーをキャッチ"
+        }
+      ]
+    },
+    "State3": {
+      "Type": "Task",
+      "Resource": "${ProcessState3FunctionArn}",
+      "End": true,
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.state3Result",
+      "Parameters": {
+        "input.$": "$",
+        "stateInfo": {
+          "stateName": "State3",
+          "stateIndex": 3
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        },
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError",
+          "ResultPath": "$.error",
+          "Comment": "State3実行エラーをキャッチ"
+        }
+      ]
+    },
+    "HandleError": {
+      "Type": "Pass",
+      "Parameters": {
+        "errorType.$": "$.error.Error",
+        "errorMessage.$": "$.error.Cause",
+        "executionDetails": {
+          "failedAt.$": "$$.State.Name",
+          "executionName.$": "$$.Execution.Name",
+          "timestamp.$": "$$.State.EnteredTime"
+        },
+        "originalInput.$": "$"
+      },
+      "Next": "FailExecution"
+    },
+    "FailExecution": {
+      "Type": "Fail",
+      "Cause": "ワークフロー実行が失敗しました。詳細はエラー情報を確認してください。"
+    }
+  }
+}

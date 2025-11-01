@@ -1,0 +1,165 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Step Functions workflow with 3 sequential Lambda states for local testing
+
+Parameters:
+  Environment:
+    Type: String
+    Default: local
+    AllowedValues: [local, dev, prod]
+    Description: Environment for deployment (local for Step Functions Local testing)
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: python3.9
+    Environment:
+      Variables:
+        PYTHONPATH: /var/task
+        ENVIRONMENT: !Ref Environment
+    Tags:
+      Environment: !Ref Environment
+      Project: StepFunctionsLocalTesting
+
+Resources:
+  # Lambda Functions for each state
+  ProcessState1Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-ProcessState1-${Environment}"
+      CodeUri: src/
+      Handler: state1.lambda_handler
+      Description: First state Lambda function - processes initial input data and adds metadata
+      Environment:
+        Variables:
+          STATE_NAME: State1
+          STATE_INDEX: "1"
+      Tags:
+        StateName: State1
+        
+  ProcessState2Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-ProcessState2-${Environment}"
+      CodeUri: src/
+      Handler: state2.lambda_handler
+      Description: Second state Lambda function - processes intermediate data from State1
+      Environment:
+        Variables:
+          STATE_NAME: State2
+          STATE_INDEX: "2"
+      Tags:
+        StateName: State2
+        
+  ProcessState3Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-ProcessState3-${Environment}"
+      CodeUri: src/
+      Handler: state3.lambda_handler
+      Description: Third state Lambda function - generates final aggregated output
+      Environment:
+        Variables:
+          STATE_NAME: State3
+          STATE_INDEX: "3"
+      Tags:
+        StateName: State3
+
+  # Step Functions State Machine
+  WorkflowStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-Workflow-${Environment}"
+      DefinitionUri: workflow/state_machine.json
+      DefinitionSubstitutions:
+        ProcessState1FunctionArn: !GetAtt ProcessState1Function.Arn
+        ProcessState2FunctionArn: !GetAtt ProcessState2Function.Arn
+        ProcessState3FunctionArn: !GetAtt ProcessState3Function.Arn
+      Role: !GetAtt StepFunctionsExecutionRole.Arn
+      Tags:
+        Environment: !Ref Environment
+        Project: StepFunctionsLocalTesting
+
+  # IAM Role for Step Functions execution
+  StepFunctionsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-StepFunctionsRole-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaInvokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ProcessState1Function.Arn
+                  - !GetAtt ProcessState2Function.Arn
+                  - !GetAtt ProcessState3Function.Arn
+        - PolicyName: LoggingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+Outputs:
+  StateMachineArn:
+    Description: ARN of the Step Functions state machine for local testing
+    Value: !Ref WorkflowStateMachine
+    Export:
+      Name: !Sub "${AWS::StackName}-StateMachineArn-${Environment}"
+      
+  StateMachineName:
+    Description: Name of the Step Functions state machine for local testing
+    Value: !Sub "${AWS::StackName}-Workflow-${Environment}"
+    Export:
+      Name: !Sub "${AWS::StackName}-StateMachineName-${Environment}"
+      
+  ProcessState1FunctionArn:
+    Description: ARN of the State1 Lambda function
+    Value: !GetAtt ProcessState1Function.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-State1Arn-${Environment}"
+    
+  ProcessState1FunctionName:
+    Description: Name of the State1 Lambda function for local testing
+    Value: !Sub "${AWS::StackName}-ProcessState1-${Environment}"
+    
+  ProcessState2FunctionArn:
+    Description: ARN of the State2 Lambda function
+    Value: !GetAtt ProcessState2Function.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-State2Arn-${Environment}"
+    
+  ProcessState2FunctionName:
+    Description: Name of the State2 Lambda function for local testing
+    Value: !Sub "${AWS::StackName}-ProcessState2-${Environment}"
+    
+  ProcessState3FunctionArn:
+    Description: ARN of the State3 Lambda function
+    Value: !GetAtt ProcessState3Function.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-State3Arn-${Environment}"
+    
+  ProcessState3FunctionName:
+    Description: Name of the State3 Lambda function for local testing
+    Value: !Sub "${AWS::StackName}-ProcessState3-${Environment}"
+    
+  StepFunctionsRoleArn:
+    Description: ARN of the Step Functions execution role
+    Value: !GetAtt StepFunctionsExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-StepFunctionsRoleArn-${Environment}"

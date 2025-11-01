@@ -1,0 +1,15 @@
+# AWS SDK and Step Functions dependencies
+boto3>=1.26.0
+botocore>=1.29.0
+
+# Testing dependencies
+pytest>=7.0.0
+pytest-mock>=3.10.0
+moto>=4.1.0
+
+# Development dependencies
+black>=22.0.0
+flake8>=5.0.0
+
+# JSON handling and utilities
+jsonschema>=4.17.0

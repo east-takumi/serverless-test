@@ -1,0 +1,154 @@
+name: Step Functions Local Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Set up Node.js for SAM CLI
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install AWS CLI
+      run: |
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install
+        aws --version
+        
+    - name: Install SAM CLI
+      run: |
+        wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
+        unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
+        sudo ./sam-installation/install
+        sam --version
+        
+    - name: Install Step Functions Local
+      run: |
+        # Install Java (required for Step Functions Local)
+        sudo apt-get update
+        sudo apt-get install -y openjdk-11-jdk
+        
+        # Download and setup Step Functions Local
+        wget https://github.com/aws/aws-stepfunctions-local/releases/download/v1.7.0/StepFunctionsLocal.jar
+        mkdir -p stepfunctions-local
+        mv StepFunctionsLocal.jar stepfunctions-local/
+        
+    - name: Configure AWS credentials (dummy for local testing)
+      run: |
+        aws configure set aws_access_key_id dummy
+        aws configure set aws_secret_access_key dummy
+        aws configure set default.region us-east-1
+        aws configure set default.output json     
+   
+    - name: Start Step Functions Local
+      run: |
+        # Start Step Functions Local in background
+        cd stepfunctions-local
+        java -jar StepFunctionsLocal.jar --lambda-endpoint http://localhost:3001 &
+        echo $! > stepfunctions.pid
+        
+        # Wait for Step Functions Local to start
+        sleep 10
+        
+        # Verify Step Functions Local is running
+        curl -f http://localhost:8083/ || (echo "Step Functions Local failed to start" && exit 1)
+        
+    - name: Build and deploy SAM application locally
+      run: |
+        # Build SAM application
+        sam build
+        
+        # Start SAM local API in background for Lambda functions
+        sam local start-api --port 3001 &
+        echo $! > sam-api.pid
+        
+        # Wait for SAM local API to start
+        sleep 15
+        
+        # Verify SAM local API is running
+        curl -f http://localhost:3001/ || echo "SAM API started"
+        
+    - name: Create Step Functions state machine
+      run: |
+        # Create the state machine using Python script
+        python scripts/create_state_machine.py
+        
+    - name: Run integration tests
+      run: |
+        # Set environment variables for tests
+        export STEPFUNCTIONS_ENDPOINT=http://localhost:8083
+        export STATE_MACHINE_ARN=$(cat state_machine_arn.txt)
+        
+        # Run the integration test suite
+        python tests/integration_test.py --config tests/test_config.json --output integration_test_report.json --verbose
+        
+    - name: Run unit tests with pytest
+      run: |
+        # Set environment variables for tests
+        export STEPFUNCTIONS_ENDPOINT=http://localhost:8083
+        export STATE_MACHINE_ARN=$(cat state_machine_arn.txt)
+        
+        # Run pytest with JUnit XML output
+        python -m pytest tests/ -v --tb=short --junit-xml=test-results.xml
+        
+    - name: Generate comprehensive test report
+      if: always()
+      run: |
+        python scripts/generate_test_report.py
+        
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: |
+          test-results.xml
+          integration_test_report.json
+          comprehensive_test_report.json
+          *.log
+          
+    - name: Cleanup processes
+      if: always()
+      run: |
+        # Stop Step Functions Local
+        if [ -f stepfunctions-local/stepfunctions.pid ]; then
+          kill $(cat stepfunctions-local/stepfunctions.pid) || true
+        fi
+        
+        # Stop SAM local API
+        if [ -f sam-api.pid ]; then
+          kill $(cat sam-api.pid) || true
+        fi
+        
+        # Clean up any remaining processes
+        pkill -f "StepFunctionsLocal.jar" || true
+        pkill -f "sam local start-api" || true
