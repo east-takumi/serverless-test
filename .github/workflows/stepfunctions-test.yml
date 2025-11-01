@@ -196,10 +196,10 @@ client = boto3.client('stepfunctions',
 try:
     response = client.describe_state_machine(stateMachineArn='$STATE_MACHINE_ARN')
     print('✓ State machine is accessible and ready for testing')
-    print(f'State machine name: {response[\"name\"]}')
-    print(f'State machine status: {response[\"status\"]}')
+    print('State machine name:', response['name'])
+    print('State machine status:', response['status'])
 except Exception as e:
-    print(f'❌ State machine accessibility test failed: {e}')
+    print('❌ State machine accessibility test failed:', str(e))
     exit(1)
 "
           else
