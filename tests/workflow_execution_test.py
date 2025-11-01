@@ -10,8 +10,22 @@ from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from dataclasses import dataclass
 
-from stepfunctions_local_client import StepFunctionsLocalClient, WorkflowExecutionMonitor
-from input_output_validator import InputOutputValidator, DataFlowValidator, AssertionHelper, ValidationResult
+try:
+    from stepfunctions_local_client import StepFunctionsLocalClient, WorkflowExecutionMonitor
+    from input_output_validator import (
+        InputOutputValidator,
+        DataFlowValidator,
+        AssertionHelper,
+        ValidationResult,
+    )
+except ImportError:  # pragma: no cover - fallback for package imports
+    from .stepfunctions_local_client import StepFunctionsLocalClient, WorkflowExecutionMonitor
+    from .input_output_validator import (
+        InputOutputValidator,
+        DataFlowValidator,
+        AssertionHelper,
+        ValidationResult,
+    )
 
 # ログ設定
 logger = logging.getLogger(__name__)

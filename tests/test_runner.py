@@ -10,9 +10,22 @@ import argparse
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-from stepfunctions_local_client import StepFunctionsLocalClient
-from workflow_execution_test import WorkflowExecutionTester, WorkflowDataFlowTracer, create_sample_test_scenarios
-from input_output_validator import InputOutputValidator
+try:
+    from stepfunctions_local_client import StepFunctionsLocalClient
+    from workflow_execution_test import (
+        WorkflowExecutionTester,
+        WorkflowDataFlowTracer,
+        create_sample_test_scenarios,
+    )
+    from input_output_validator import InputOutputValidator
+except ImportError:  # pragma: no cover - fallback for package imports
+    from .stepfunctions_local_client import StepFunctionsLocalClient
+    from .workflow_execution_test import (
+        WorkflowExecutionTester,
+        WorkflowDataFlowTracer,
+        create_sample_test_scenarios,
+    )
+    from .input_output_validator import InputOutputValidator
 
 # ログ設定
 logging.basicConfig(
