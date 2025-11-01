@@ -85,50 +85,91 @@ jobs:
       - name: Build and deploy SAM application locally
         run: |
           # Build SAM application
-          sam build
+          echo "Building SAM application..."
+          sam build --debug
+          
+          # Verify build was successful
+          if [ ! -d ".aws-sam/build" ]; then
+            echo "SAM build failed - .aws-sam/build directory not found"
+            exit 1
+          fi
+          
+          echo "SAM build completed successfully"
+          ls -la .aws-sam/build/
 
           # Start SAM local Lambda endpoint in background for Step Functions
-          # Use start-lambda instead of start-api since we don't have API Gateway resources
-          sam local start-lambda --port 3001 &
+          echo "Starting SAM local Lambda endpoint..."
+          sam local start-lambda --port 3001 --debug &
           echo $! > sam-lambda.pid
 
           # Wait for SAM local Lambda endpoint to start
-          sleep 15
+          sleep 20
 
           # Verify SAM local Lambda endpoint is running
-          # Lambda endpoint doesn't respond to HTTP GET, so just check if process is running
           if ps -p $(cat sam-lambda.pid) > /dev/null; then
-            echo "SAM Lambda endpoint started successfully"
+            echo "✓ SAM Lambda endpoint process is running (PID: $(cat sam-lambda.pid))"
+            
+            # Test Lambda endpoint connectivity
+            echo "Testing Lambda endpoint connectivity..."
+            timeout 30 bash -c 'until netstat -tuln | grep :3001; do echo "Waiting for port 3001..."; sleep 2; done' || echo "Port 3001 may not be ready yet"
+            
+            echo "✓ SAM Lambda endpoint started successfully"
           else
-            echo "SAM Lambda endpoint failed to start"
+            echo "❌ SAM Lambda endpoint failed to start"
             exit 1
           fi
 
       - name: Start Step Functions Local
         run: |
+          echo "Starting Step Functions Local..."
+          
           # Start Step Functions Local using Docker in background
-          # Now that SAM API is running, Step Functions can connect to it
-          # Use host network for simplicity in GitHub Actions
           docker run -d \
             --name stepfunctions-local \
             --network host \
             -e LAMBDA_ENDPOINT=http://localhost:3001 \
+            -e SFN_MOCK_CONFIG='{}' \
             amazon/aws-stepfunctions-local:latest
 
           # Wait for Step Functions Local to start
-          sleep 20
+          echo "Waiting for Step Functions Local to initialize..."
+          sleep 25
 
           # Check if container is running
-          docker ps | grep stepfunctions-local
+          echo "Checking container status..."
+          if docker ps | grep stepfunctions-local; then
+            echo "✓ Step Functions Local container is running"
+          else
+            echo "❌ Step Functions Local container is not running"
+            docker ps -a | grep stepfunctions-local
+            exit 1
+          fi
 
           # Check container logs for any errors
+          echo "Container logs:"
           docker logs stepfunctions-local
 
-          # Verify Step Functions Local is responding (use a simpler check)
-          timeout 30 bash -c 'until curl -s http://localhost:8083/ > /dev/null 2>&1; do sleep 2; done' || echo "Step Functions Local may not be fully ready, continuing..."
+          # Verify Step Functions Local is responding
+          echo "Testing Step Functions Local connectivity..."
+          for i in {1..15}; do
+            if curl -s -f http://localhost:8083/ > /dev/null 2>&1; then
+              echo "✓ Step Functions Local is responding on port 8083"
+              break
+            elif [ $i -eq 15 ]; then
+              echo "❌ Step Functions Local failed to respond after 15 attempts"
+              echo "Final container logs:"
+              docker logs stepfunctions-local
+              exit 1
+            else
+              echo "Attempt $i/15: Step Functions Local not ready yet, waiting..."
+              sleep 2
+            fi
+          done
 
       - name: Create Step Functions state machine
         run: |
+          echo "Creating Step Functions state machine..."
+          
           # Set environment variables for state machine creation
           export STEPFUNCTIONS_ENDPOINT=http://localhost:8083
           export SAM_STACK_NAME=stepfunctions-local-testing
@@ -136,12 +177,78 @@ jobs:
 
           # Create the state machine using Python script
           python scripts/create_state_machine.py
+          
+          # Verify state machine ARN was created
+          if [ -f "state_machine_arn.txt" ]; then
+            STATE_MACHINE_ARN=$(cat state_machine_arn.txt)
+            echo "✓ State machine created successfully: $STATE_MACHINE_ARN"
+            
+            # Test state machine accessibility
+            echo "Testing state machine accessibility..."
+            python -c "
+import boto3
+import os
+client = boto3.client('stepfunctions', 
+                     endpoint_url='http://localhost:8083',
+                     region_name='us-east-1',
+                     aws_access_key_id='dummy',
+                     aws_secret_access_key='dummy')
+try:
+    response = client.describe_state_machine(stateMachineArn='$STATE_MACHINE_ARN')
+    print('✓ State machine is accessible and ready for testing')
+    print(f'State machine name: {response[\"name\"]}')
+    print(f'State machine status: {response[\"status\"]}')
+except Exception as e:
+    print(f'❌ State machine accessibility test failed: {e}')
+    exit(1)
+"
+          else
+            echo "❌ State machine ARN file not found"
+            exit 1
+          fi
+
+      - name: Pre-test environment verification
+        run: |
+          echo "Verifying test environment before running tests..."
+          
+          # Check all required services
+          echo "1. Checking SAM Lambda endpoint..."
+          if ps -p $(cat sam-lambda.pid) > /dev/null; then
+            echo "✓ SAM Lambda endpoint is running"
+          else
+            echo "❌ SAM Lambda endpoint is not running"
+            exit 1
+          fi
+          
+          echo "2. Checking Step Functions Local..."
+          if docker ps | grep stepfunctions-local > /dev/null; then
+            echo "✓ Step Functions Local container is running"
+          else
+            echo "❌ Step Functions Local container is not running"
+            exit 1
+          fi
+          
+          echo "3. Checking state machine ARN..."
+          if [ -f "state_machine_arn.txt" ]; then
+            echo "✓ State machine ARN file exists: $(cat state_machine_arn.txt)"
+          else
+            echo "❌ State machine ARN file not found"
+            exit 1
+          fi
+          
+          echo "✓ All services are ready for testing"
 
       - name: Run integration tests
         run: |
+          echo "Starting integration tests..."
+          
           # Set environment variables for tests
           export STEPFUNCTIONS_ENDPOINT=http://localhost:8083
           export STATE_MACHINE_ARN=$(cat state_machine_arn.txt)
+          
+          echo "Environment variables:"
+          echo "STEPFUNCTIONS_ENDPOINT=$STEPFUNCTIONS_ENDPOINT"
+          echo "STATE_MACHINE_ARN=$STATE_MACHINE_ARN"
 
           # Run the integration test suite
           python tests/integration_test.py --config tests/test_config.json --output integration_test_report.json --verbose
@@ -171,9 +278,38 @@ jobs:
             comprehensive_test_report.json
             *.log
 
+      - name: Collect debug information
+        if: failure()
+        run: |
+          echo "Collecting debug information due to test failure..."
+          
+          echo "=== Docker containers ==="
+          docker ps -a
+          
+          echo "=== Step Functions Local logs ==="
+          docker logs stepfunctions-local || echo "No Step Functions Local logs available"
+          
+          echo "=== SAM Lambda process ==="
+          if [ -f sam-lambda.pid ]; then
+            echo "SAM Lambda PID: $(cat sam-lambda.pid)"
+            ps -p $(cat sam-lambda.pid) || echo "SAM Lambda process not running"
+          fi
+          
+          echo "=== Network connections ==="
+          netstat -tuln | grep -E ':(3001|8083)'
+          
+          echo "=== File system ==="
+          ls -la
+          ls -la .aws-sam/build/ || echo "No SAM build directory"
+          
+          echo "=== State machine ARN ==="
+          cat state_machine_arn.txt || echo "No state machine ARN file"
+
       - name: Cleanup processes
         if: always()
         run: |
+          echo "Cleaning up processes and containers..."
+          
           # Stop Step Functions Local Docker container
           docker stop stepfunctions-local || true
           docker rm stepfunctions-local || true
@@ -185,3 +321,5 @@ jobs:
 
           # Clean up any remaining processes
           pkill -f "sam local start-lambda" || true
+          
+          echo "Cleanup completed"
