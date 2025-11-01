@@ -185,23 +185,27 @@ jobs:
             
             # Test state machine accessibility
             echo "Testing state machine accessibility..."
-            python -c "
+            cat > test_state_machine.py << 'EOF'
 import boto3
 import os
+import sys
 client = boto3.client('stepfunctions', 
                      endpoint_url='http://localhost:8083',
                      region_name='us-east-1',
                      aws_access_key_id='dummy',
                      aws_secret_access_key='dummy')
 try:
-    response = client.describe_state_machine(stateMachineArn='$STATE_MACHINE_ARN')
+    state_machine_arn = os.environ.get('STATE_MACHINE_ARN')
+    response = client.describe_state_machine(stateMachineArn=state_machine_arn)
     print('✓ State machine is accessible and ready for testing')
     print('State machine name:', response['name'])
     print('State machine status:', response['status'])
 except Exception as e:
     print('❌ State machine accessibility test failed:', str(e))
-    exit(1)
-"
+    sys.exit(1)
+EOF
+            export STATE_MACHINE_ARN="$STATE_MACHINE_ARN"
+            python test_state_machine.py
           else
             echo "❌ State machine ARN file not found"
             exit 1
