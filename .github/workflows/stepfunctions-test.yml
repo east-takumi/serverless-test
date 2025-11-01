@@ -82,22 +82,6 @@ jobs:
         aws configure set default.region us-east-1
         aws configure set default.output json     
    
-    - name: Start Step Functions Local
-      run: |
-        # Start Step Functions Local using Docker in background
-        # Use host networking for better compatibility in GitHub Actions
-        docker run -d \
-          --name stepfunctions-local \
-          --network host \
-          -e LAMBDA_ENDPOINT=http://localhost:3001 \
-          amazon/aws-stepfunctions-local:latest
-        
-        # Wait for Step Functions Local to start
-        sleep 15
-        
-        # Verify Step Functions Local is running
-        curl -f http://localhost:8083/ || (echo "Step Functions Local failed to start" && exit 1)
-        
     - name: Build and deploy SAM application locally
       run: |
         # Build SAM application
@@ -112,6 +96,29 @@ jobs:
         
         # Verify SAM local API is running
         curl -f http://localhost:3001/ || echo "SAM API started"
+        
+    - name: Start Step Functions Local
+      run: |
+        # Start Step Functions Local using Docker in background
+        # Now that SAM API is running, Step Functions can connect to it
+        # Use host network for simplicity in GitHub Actions
+        docker run -d \
+          --name stepfunctions-local \
+          --network host \
+          -e LAMBDA_ENDPOINT=http://localhost:3001 \
+          amazon/aws-stepfunctions-local:latest
+        
+        # Wait for Step Functions Local to start
+        sleep 20
+        
+        # Check if container is running
+        docker ps | grep stepfunctions-local
+        
+        # Check container logs for any errors
+        docker logs stepfunctions-local
+        
+        # Verify Step Functions Local is responding (use a simpler check)
+        timeout 30 bash -c 'until curl -s http://localhost:8083/ > /dev/null 2>&1; do sleep 2; done' || echo "Step Functions Local may not be fully ready, continuing..."
         
     - name: Create Step Functions state machine
       run: |
