@@ -152,7 +152,9 @@ jobs:
           # Verify Step Functions Local is responding
           echo "Testing Step Functions Local connectivity..."
           for i in {1..15}; do
-            if curl -s -f http://localhost:8083/ > /dev/null 2>&1; then
+            if aws stepfunctions list-state-machines \
+              --endpoint-url http://localhost:8083 \
+              --region us-east-1 > /dev/null 2>&1; then
               echo "✓ Step Functions Local is responding on port 8083"
               break
             elif [ $i -eq 15 ]; then
