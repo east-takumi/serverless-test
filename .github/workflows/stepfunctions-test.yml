@@ -67,15 +67,14 @@ jobs:
           fi
           sam --version
 
-      - name: Setup Step Functions Local with Docker
+      - name: Download Step Functions Local (JAR)
         run: |
-          # Pull the official AWS Step Functions Local Docker image
-          docker pull amazon/aws-stepfunctions-local:latest
+          echo "Downloading Step Functions Local distribution..."
+          curl -L -o StepFunctionsLocal.zip https://s3.amazonaws.com/stepfunctionslocal/StepFunctionsLocal.zip
+          unzip -o StepFunctionsLocal.zip -d stepfunctions-local
+          ls -la stepfunctions-local
 
-          # Verify Docker image is available
-          docker images amazon/aws-stepfunctions-local
-
-      - name: Configure AWS credentials (dummy for local testing)
+      - name: Configure dummy AWS credentials for local testing
         run: |
           aws configure set aws_access_key_id dummy
           aws configure set aws_secret_access_key dummy
@@ -121,47 +120,31 @@ jobs:
 
       - name: Start Step Functions Local
         run: |
-          echo "Starting Step Functions Local..."
-          
-          # Start Step Functions Local using Docker in background
-          docker run -d \
-            --name stepfunctions-local \
-            --network host \
-            -e LAMBDA_ENDPOINT=http://localhost:3001 \
-            -e SFN_MOCK_CONFIG='{}' \
-            amazon/aws-stepfunctions-local:latest
+          echo "Starting Step Functions Local via local JAR..."
+
+          java -jar stepfunctions-local/StepFunctionsLocal.jar \
+            --lambda-endpoint http://localhost:3001 \
+            --aws-account-id 123456789012 \
+            --lambda-function-arn-prefix arn:aws:lambda:us-east-1:123456789012:function \
+            --region us-east-1 > stepfunctions-local.log 2>&1 &
+
+          echo $! > stepfunctions-local.pid
 
           # Wait for Step Functions Local to start
           echo "Waiting for Step Functions Local to initialize..."
-          sleep 25
-
-          # Check if container is running
-          echo "Checking container status..."
-          if docker ps | grep stepfunctions-local; then
-            echo "✓ Step Functions Local container is running"
-          else
-            echo "❌ Step Functions Local container is not running"
-            docker ps -a | grep stepfunctions-local
-            exit 1
-          fi
-
-          # Check container logs for any errors
-          echo "Container logs:"
-          docker logs stepfunctions-local
-
-          # Verify Step Functions Local is responding
-          echo "Testing Step Functions Local connectivity..."
-          for i in {1..15}; do
-            if curl -s -f http://localhost:8083/ > /dev/null 2>&1; then
+          for i in {1..20}; do
+            if aws stepfunctions list-state-machines \
+              --endpoint-url http://localhost:8083 \
+              --region us-east-1 > /dev/null 2>&1; then
               echo "✓ Step Functions Local is responding on port 8083"
               break
-            elif [ $i -eq 15 ]; then
-              echo "❌ Step Functions Local failed to respond after 15 attempts"
-              echo "Final container logs:"
-              docker logs stepfunctions-local
+            elif [ $i -eq 20 ]; then
+              echo "❌ Step Functions Local failed to respond after 20 attempts"
+              echo "Final Step Functions Local logs:"
+              cat stepfunctions-local.log || true
               exit 1
             else
-              echo "Attempt $i/15: Step Functions Local not ready yet, waiting..."
+              echo "Attempt $i/20: Step Functions Local not ready yet, waiting..."
               sleep 2
             fi
           done
@@ -174,38 +157,20 @@ jobs:
           export STEPFUNCTIONS_ENDPOINT=http://localhost:8083
           export SAM_STACK_NAME=stepfunctions-local-testing
           export ENVIRONMENT=local
+          export LOCAL_AWS_ACCOUNT_ID=123456789012
 
           # Create the state machine using Python script
           python scripts/create_state_machine.py
-          
+
           # Verify state machine ARN was created
           if [ -f "state_machine_arn.txt" ]; then
             STATE_MACHINE_ARN=$(cat state_machine_arn.txt)
             echo "✓ State machine created successfully: $STATE_MACHINE_ARN"
-            
+
             # Test state machine accessibility
             echo "Testing state machine accessibility..."
-            cat > test_state_machine.py << 'EOF'
-import boto3
-import os
-import sys
-client = boto3.client('stepfunctions', 
-                     endpoint_url='http://localhost:8083',
-                     region_name='us-east-1',
-                     aws_access_key_id='dummy',
-                     aws_secret_access_key='dummy')
-try:
-    state_machine_arn = os.environ.get('STATE_MACHINE_ARN')
-    response = client.describe_state_machine(stateMachineArn=state_machine_arn)
-    print('✓ State machine is accessible and ready for testing')
-    print('State machine name:', response['name'])
-    print('State machine status:', response['status'])
-except Exception as e:
-    print('❌ State machine accessibility test failed:', str(e))
-    sys.exit(1)
-EOF
             export STATE_MACHINE_ARN="$STATE_MACHINE_ARN"
-            python test_state_machine.py
+            python scripts/check_state_machine_accessibility.py
           else
             echo "❌ State machine ARN file not found"
             exit 1
@@ -225,10 +190,10 @@ EOF
           fi
           
           echo "2. Checking Step Functions Local..."
-          if docker ps | grep stepfunctions-local > /dev/null; then
-            echo "✓ Step Functions Local container is running"
+          if [ -f stepfunctions-local.pid ] && ps -p $(cat stepfunctions-local.pid) > /dev/null; then
+            echo "✓ Step Functions Local process is running (PID: $(cat stepfunctions-local.pid))"
           else
-            echo "❌ Step Functions Local container is not running"
+            echo "❌ Step Functions Local process is not running"
             exit 1
           fi
           
@@ -291,7 +256,11 @@ EOF
           docker ps -a
           
           echo "=== Step Functions Local logs ==="
-          docker logs stepfunctions-local || echo "No Step Functions Local logs available"
+          if [ -f stepfunctions-local.log ]; then
+            tail -n 200 stepfunctions-local.log
+          else
+            echo "No Step Functions Local log available"
+          fi
           
           echo "=== SAM Lambda process ==="
           if [ -f sam-lambda.pid ]; then
@@ -313,10 +282,11 @@ EOF
         if: always()
         run: |
           echo "Cleaning up processes and containers..."
-          
-          # Stop Step Functions Local Docker container
-          docker stop stepfunctions-local || true
-          docker rm stepfunctions-local || true
+
+          # Stop Step Functions Local process
+          if [ -f stepfunctions-local.pid ]; then
+            kill $(cat stepfunctions-local.pid) || true
+          fi
 
           # Stop SAM local Lambda endpoint
           if [ -f sam-lambda.pid ]; then

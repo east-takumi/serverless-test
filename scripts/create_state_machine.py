@@ -38,10 +38,12 @@ def create_state_machine():
         stack_name = os.getenv('SAM_STACK_NAME', 'stepfunctions-local-testing')
         environment = os.getenv('ENVIRONMENT', 'local')
         
+        account_id = os.getenv('LOCAL_AWS_ACCOUNT_ID', '123456789012')
+
         local_function_arns = {
-            'ProcessState1FunctionArn': f'arn:aws:lambda:us-east-1:123456789012:function:{stack_name}-ProcessState1-{environment}',
-            'ProcessState2FunctionArn': f'arn:aws:lambda:us-east-1:123456789012:function:{stack_name}-ProcessState2-{environment}',
-            'ProcessState3FunctionArn': f'arn:aws:lambda:us-east-1:123456789012:function:{stack_name}-ProcessState3-{environment}'
+            'ProcessState1FunctionArn': f'arn:aws:lambda:us-east-1:{account_id}:function:{stack_name}-ProcessState1-{environment}',
+            'ProcessState2FunctionArn': f'arn:aws:lambda:us-east-1:{account_id}:function:{stack_name}-ProcessState2-{environment}',
+            'ProcessState3FunctionArn': f'arn:aws:lambda:us-east-1:{account_id}:function:{stack_name}-ProcessState3-{environment}'
         }
         
         # プレースホルダーを実際のARNに置換
@@ -78,7 +80,7 @@ def create_state_machine():
         
         # ステートマシンの作成
         state_machine_name = 'stepfunctions-local-testing-Workflow'
-        role_arn = 'arn:aws:iam::123456789012:role/DummyRole'
+        role_arn = f'arn:aws:iam::{account_id}:role/DummyRole'
         
         logger.info(f"Creating state machine: {state_machine_name}")
         
